@@ -11,6 +11,8 @@ class CardRepository(
     
     suspend fun getCardById(cardId: Long): Card? = cardDao.getCardById(cardId)
     
+    suspend fun getCardByUniqueId(uniqueId: String): Card? = cardDao.getCardByUniqueId(uniqueId)
+    
     suspend fun insertCard(card: Card): Long = cardDao.insertCard(card)
     
     suspend fun updateCard(card: Card) = cardDao.updateCard(card)
@@ -37,6 +39,9 @@ class CardRepository(
     
     suspend fun getTransactionById(transactionId: Long): Transaction? =
         transactionDao.getTransactionById(transactionId)
+    
+    suspend fun getTransactionByUniqueId(uniqueId: String): Transaction? =
+        transactionDao.getTransactionByUniqueId(uniqueId)
     
     fun getTotalSpendForCard(cardId: Long): Flow<Double> =
         transactionDao.getTotalSpendForCard(cardId)

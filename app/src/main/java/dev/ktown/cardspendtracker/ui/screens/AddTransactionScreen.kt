@@ -52,6 +52,7 @@ fun AddTransactionScreen(
     var showDatePicker by remember { mutableStateOf(false) }
     
     var cardName by remember { mutableStateOf("") }
+    var existingTransaction by remember { mutableStateOf<Transaction?>(null) }
     val isEditing = transactionId != null
     
     LaunchedEffect(cardId, transactionId) {
@@ -62,6 +63,7 @@ fun AddTransactionScreen(
         transactionId?.let { id ->
             val transaction = transactionViewModel.getTransactionById(id)
             transaction?.let {
+                existingTransaction = it
                 amount = it.amount.toString()
                 description = it.description
                 transactionDate = it.date
@@ -169,13 +171,20 @@ fun AddTransactionScreen(
                 onClick = {
                     val transactionAmount = amount.toDoubleOrNull() ?: 0.0
                     if (transactionAmount > 0) {
-                        val transaction = Transaction(
-                            id = transactionId ?: 0,
-                            cardId = cardId,
-                            amount = transactionAmount,
-                            description = description,
-                            date = transactionDate
-                        )
+                        val transaction = if (isEditing && existingTransaction != null) {
+                            existingTransaction!!.copy(
+                                amount = transactionAmount,
+                                description = description,
+                                date = transactionDate
+                            )
+                        } else {
+                            Transaction(
+                                cardId = cardId,
+                                amount = transactionAmount,
+                                description = description,
+                                date = transactionDate
+                            )
+                        }
                         if (isEditing) {
                             transactionViewModel.updateTransaction(transaction)
                         } else {

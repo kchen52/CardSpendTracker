@@ -11,6 +11,9 @@ interface CardDao {
     @Query("SELECT * FROM cards WHERE id = :cardId")
     suspend fun getCardById(cardId: Long): Card?
     
+    @Query("SELECT * FROM cards WHERE uniqueId = :uniqueId")
+    suspend fun getCardByUniqueId(uniqueId: String): Card?
+    
     @Insert
     suspend fun insertCard(card: Card): Long
     

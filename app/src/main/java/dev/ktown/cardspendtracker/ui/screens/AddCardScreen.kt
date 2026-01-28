@@ -51,6 +51,7 @@ fun AddCardScreen(
     var hasEndDate by remember { mutableStateOf(false) }
     var endDate by remember { mutableStateOf<Date?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var existingCard by remember { mutableStateOf<Card?>(null) }
     
     val isEditMode = cardId != null
     
@@ -58,6 +59,7 @@ fun AddCardScreen(
         if (cardId != null) {
             val card = viewModel.getCardById(cardId)
             card?.let {
+                existingCard = it
                 name = it.name
                 selectedColor = Color(it.color)
             }
@@ -261,10 +263,9 @@ fun AddCardScreen(
             Button(
                 onClick = {
                     if (isEditMode) {
-                        if (name.isNotBlank()) {
+                        if (name.isNotBlank() && existingCard != null) {
                             viewModel.updateCard(
-                                Card(
-                                    id = cardId ?: 0,
+                                existingCard!!.copy(
                                     name = name,
                                     color = selectedColor.value.toLong()
                                 )

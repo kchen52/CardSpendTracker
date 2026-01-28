@@ -20,8 +20,8 @@ class ExportImportManager(private val context: Context) {
         // Get all cards
         val cards = repository.getAllCardsSync()
         
-        // Create card name to ID mapping
-        val cardNameToId = cards.associateBy { it.name }
+        // Create card uniqueId to card mapping
+        val cardUniqueIdToCard = cards.associateBy { it.uniqueId }
         
         // Get all goals
         val goals = cards.flatMap { card ->
@@ -41,7 +41,8 @@ class ExportImportManager(private val context: Context) {
         val transactions = cards.flatMap { card ->
             repository.getTransactionsForCardSync(card.id).map { transaction ->
                 TransactionExport(
-                    cardName = card.name,
+                    uniqueId = transaction.uniqueId,
+                    cardUniqueId = card.uniqueId,
                     amount = transaction.amount,
                     description = transaction.description,
                     date = transaction.date.time
@@ -53,6 +54,7 @@ class ExportImportManager(private val context: Context) {
         val exportData = ExportData(
             cards = cards.map { card ->
                 CardExport(
+                    uniqueId = card.uniqueId,
                     name = card.name,
                     color = card.color,
                     createdAt = card.createdAt.time
@@ -76,26 +78,30 @@ class ExportImportManager(private val context: Context) {
             val errors = mutableListOf<String>()
             
             // Import cards
-            val cardNameToId = mutableMapOf<String, Long>()
+            val cardUniqueIdToId = mutableMapOf<String, Long>()
             for (cardExport in exportData.cards) {
                 try {
-                    // Check if card already exists
-                    val existingCard = repository.getAllCardsSync().find { it.name == cardExport.name }
+                    // Check if card already exists by uniqueId
+                    val existingCard = repository.getCardByUniqueId(cardExport.uniqueId)
                     if (existingCard != null) {
-                        // Update existing card
-                        val updatedCard = existingCard.copy(color = cardExport.color)
+                        // Update existing card (preserve uniqueId)
+                        val updatedCard = existingCard.copy(
+                            name = cardExport.name,
+                            color = cardExport.color
+                        )
                         repository.updateCard(updatedCard)
-                        cardNameToId[cardExport.name] = existingCard.id
+                        cardUniqueIdToId[cardExport.uniqueId] = existingCard.id
                         importedCards.add(cardExport.name)
                     } else {
-                        // Create new card
+                        // Create new card with the exported uniqueId
                         val newCard = Card(
+                            uniqueId = cardExport.uniqueId,
                             name = cardExport.name,
                             color = cardExport.color,
                             createdAt = Date(cardExport.createdAt)
                         )
                         val cardId = repository.insertCard(newCard)
-                        cardNameToId[cardExport.name] = cardId
+                        cardUniqueIdToId[cardExport.uniqueId] = cardId
                         importedCards.add(cardExport.name)
                     }
                 } catch (e: Exception) {
@@ -104,6 +110,9 @@ class ExportImportManager(private val context: Context) {
             }
             
             // Import goals
+            // Goals still reference cards by name for backward compatibility
+            val allCards = repository.getAllCardsSync()
+            val cardNameToId = allCards.associateBy({ it.name }, { it.id })
             for (goalExport in exportData.goals) {
                 try {
                     val cardId = cardNameToId[goalExport.cardName]
@@ -130,20 +139,28 @@ class ExportImportManager(private val context: Context) {
             // Import transactions
             for (transactionExport in exportData.transactions) {
                 try {
-                    val cardId = cardNameToId[transactionExport.cardName]
+                    val cardId = cardUniqueIdToId[transactionExport.cardUniqueId]
                     if (cardId == null) {
-                        errors.add("Transaction references unknown card '${transactionExport.cardName}'")
+                        errors.add("Transaction references unknown card (uniqueId: ${transactionExport.cardUniqueId})")
+                        continue
+                    }
+                    
+                    // Check if transaction already exists by uniqueId
+                    val existingTransaction = repository.getTransactionByUniqueId(transactionExport.uniqueId)
+                    if (existingTransaction != null) {
+                        // Skip duplicate transaction
                         continue
                     }
                     
                     val transaction = Transaction(
+                        uniqueId = transactionExport.uniqueId,
                         cardId = cardId,
                         amount = transactionExport.amount,
                         description = transactionExport.description,
                         date = Date(transactionExport.date)
                     )
                     repository.insertTransaction(transaction)
-                    importedTransactions.add("${transactionExport.amount} on ${transactionExport.cardName}")
+                    importedTransactions.add("${transactionExport.amount}")
                 } catch (e: Exception) {
                     errors.add("Failed to import transaction: ${e.message}")
                 }

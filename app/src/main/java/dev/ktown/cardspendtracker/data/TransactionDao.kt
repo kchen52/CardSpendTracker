@@ -11,6 +11,9 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE id = :transactionId")
     suspend fun getTransactionById(transactionId: Long): Transaction?
     
+    @Query("SELECT * FROM transactions WHERE uniqueId = :uniqueId")
+    suspend fun getTransactionByUniqueId(uniqueId: String): Transaction?
+    
     @Query("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE cardId = :cardId")
     fun getTotalSpendForCard(cardId: Long): Flow<Double>
     

@@ -45,7 +45,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -98,6 +101,31 @@ fun HomeScreen(
             AppDatabase.getDatabase(context).goalDao(),
             AppDatabase.getDatabase(context).transactionDao()
         )
+    }
+
+    // Persist expand/collapse state
+    val prefs = remember {
+        context.getSharedPreferences("card_expand_state", Context.MODE_PRIVATE)
+    }
+    var collapsedCardIds by remember {
+        mutableStateOf<Set<Long>>(emptySet())
+    }
+
+    LaunchedEffect(Unit) {
+        val storedIds = prefs.getStringSet("collapsed_ids", emptySet()) ?: emptySet()
+        collapsedCardIds = storedIds.mapNotNull { it.toLongOrNull() }.toSet()
+    }
+
+    fun updateCollapsedState(cardId: Long, isCollapsed: Boolean) {
+        val newSet = if (isCollapsed) {
+            collapsedCardIds + cardId
+        } else {
+            collapsedCardIds - cardId
+        }
+        collapsedCardIds = newSet
+        prefs.edit()
+            .putStringSet("collapsed_ids", newSet.map { it.toString() }.toSet())
+            .apply()
     }
 
     var showImportDialog by remember { mutableStateOf(false) }
@@ -244,14 +272,21 @@ fun HomeScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    items(cardsWithProgress) { cardWithProgress ->
-                        CardProgressItem(
-                            cardWithProgress = cardWithProgress,
-                            onAddTransaction = { onNavigateToAddTransaction(cardWithProgress.card.id) },
-                            onViewTransactions = { onNavigateToTransactions(cardWithProgress.card.id) },
-                            onManageGoals = { onNavigateToGoals(cardWithProgress.card.id) }
-                        )
-                    }
+                items(cardsWithProgress) { cardWithProgress ->
+                    val cardId = cardWithProgress.card.id
+                    val isExpanded = cardId !in collapsedCardIds
+                    
+                    CardProgressItem(
+                        cardWithProgress = cardWithProgress,
+                        isExpanded = isExpanded,
+                        onToggleExpanded = {
+                            updateCollapsedState(cardId, isCollapsed = isExpanded)
+                        },
+                        onAddTransaction = { onNavigateToAddTransaction(cardId) },
+                        onViewTransactions = { onNavigateToTransactions(cardId) },
+                        onManageGoals = { onNavigateToGoals(cardId) }
+                    )
+                }
                 }
 
                 // Loading indicators overlay
@@ -314,6 +349,8 @@ fun HomeScreen(
 @Composable
 fun CardProgressItem(
     cardWithProgress: CardWithGoalsProgress,
+    isExpanded: Boolean,
+    onToggleExpanded: () -> Unit,
     onAddTransaction: () -> Unit,
     onViewTransactions: () -> Unit,
     onManageGoals: () -> Unit
@@ -322,7 +359,6 @@ fun CardProgressItem(
     val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
     val cardColor = Color(cardWithProgress.card.color.toULong())
     val allGoalsHit = cardWithProgress.goals.isNotEmpty() && cardWithProgress.goals.all { it.progress >= 1f }
-    var isExpanded by remember { mutableStateOf(true) }
 
     Card(
         modifier = Modifier
@@ -348,7 +384,7 @@ fun CardProgressItem(
                     cardWithProgress = cardWithProgress,
                     allGoalsHit = allGoalsHit,
                     isExpanded = isExpanded,
-                    onToggleExpanded = { isExpanded = !isExpanded },
+                    onToggleExpanded = onToggleExpanded,
                     onAddTransaction = onAddTransaction,
                     onViewTransactions = onViewTransactions,
                     onManageGoals = onManageGoals

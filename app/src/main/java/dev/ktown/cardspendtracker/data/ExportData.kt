@@ -11,6 +11,7 @@ data class ExportData(
 )
 
 data class CardExport(
+    val uniqueId: String,
     val name: String,
     val color: Long,
     val createdAt: Long
@@ -26,7 +27,8 @@ data class GoalExport(
 )
 
 data class TransactionExport(
-    val cardName: String, // Reference by name instead of ID
+    val uniqueId: String,
+    val cardUniqueId: String, // Reference by uniqueId instead of name
     val amount: Double,
     val description: String,
     val date: Long
