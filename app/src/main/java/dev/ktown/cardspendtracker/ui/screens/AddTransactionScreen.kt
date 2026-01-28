@@ -19,16 +19,19 @@ import dev.ktown.cardspendtracker.ui.viewmodel.CardViewModelFactory
 import dev.ktown.cardspendtracker.ui.viewmodel.TransactionViewModel
 import dev.ktown.cardspendtracker.ui.viewmodel.TransactionViewModelFactory
 import java.util.*
+import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddTransactionScreen(
     cardId: Long,
+    transactionId: Long? = null,
     onNavigateBack: () -> Unit,
     cardViewModel: CardViewModel = viewModel(
         factory = CardViewModelFactory(
             CardRepository(
                 AppDatabase.getDatabase(LocalContext.current).cardDao(),
+                AppDatabase.getDatabase(LocalContext.current).goalDao(),
                 AppDatabase.getDatabase(LocalContext.current).transactionDao()
             )
         )
@@ -37,6 +40,7 @@ fun AddTransactionScreen(
         factory = TransactionViewModelFactory(
             CardRepository(
                 AppDatabase.getDatabase(LocalContext.current).cardDao(),
+                AppDatabase.getDatabase(LocalContext.current).goalDao(),
                 AppDatabase.getDatabase(LocalContext.current).transactionDao()
             )
         )
@@ -48,16 +52,27 @@ fun AddTransactionScreen(
     var showDatePicker by remember { mutableStateOf(false) }
     
     var cardName by remember { mutableStateOf("") }
+    val isEditing = transactionId != null
     
-    LaunchedEffect(cardId) {
+    LaunchedEffect(cardId, transactionId) {
         val card = cardViewModel.getCardById(cardId)
         card?.let { cardName = it.name }
+        
+        // Load transaction data if editing
+        transactionId?.let { id ->
+            val transaction = transactionViewModel.getTransactionById(id)
+            transaction?.let {
+                amount = it.amount.toString()
+                description = it.description
+                transactionDate = it.date
+            }
+        }
     }
     
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Add Transaction") },
+                title = { Text(if (isEditing) "Edit Transaction" else "Add Transaction") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -112,8 +127,15 @@ fun AddTransactionScreen(
                     confirmButton = {
                         TextButton(
                             onClick = {
-                                datePickerState.selectedDateMillis?.let {
-                                    transactionDate = Date(it)
+                                datePickerState.selectedDateMillis?.let { millis ->
+                                    // Convert UTC milliseconds to local date at midnight
+                                    val calendar = Calendar.getInstance()
+                                    calendar.timeInMillis = millis
+                                    calendar.set(Calendar.HOUR_OF_DAY, 0)
+                                    calendar.set(Calendar.MINUTE, 0)
+                                    calendar.set(Calendar.SECOND, 0)
+                                    calendar.set(Calendar.MILLISECOND, 0)
+                                    transactionDate = calendar.time
                                 }
                                 showDatePicker = false
                             }
@@ -148,19 +170,24 @@ fun AddTransactionScreen(
                     val transactionAmount = amount.toDoubleOrNull() ?: 0.0
                     if (transactionAmount > 0) {
                         val transaction = Transaction(
+                            id = transactionId ?: 0,
                             cardId = cardId,
                             amount = transactionAmount,
                             description = description,
                             date = transactionDate
                         )
-                        transactionViewModel.addTransaction(transaction)
+                        if (isEditing) {
+                            transactionViewModel.updateTransaction(transaction)
+                        } else {
+                            transactionViewModel.addTransaction(transaction)
+                        }
                         onNavigateBack()
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = amount.toDoubleOrNull() != null && amount.toDoubleOrNull()!! > 0
             ) {
-                Text("Add Transaction")
+                Text(if (isEditing) "Update Transaction" else "Add Transaction")
             }
         }
     }

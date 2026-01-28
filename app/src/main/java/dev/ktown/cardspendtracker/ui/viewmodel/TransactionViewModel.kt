@@ -45,4 +45,8 @@ class TransactionViewModel(private val repository: CardRepository) : ViewModel()
             repository.deleteTransaction(transaction)
         }
     }
+    
+    suspend fun getTransactionById(transactionId: Long): Transaction? {
+        return repository.getTransactionById(transactionId)
+    }
 }

@@ -1,26 +1,71 @@
 package dev.ktown.cardspendtracker.ui.screens
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CreditCard
-import androidx.compose.material3.*
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.ktown.cardspendtracker.data.AppDatabase
 import dev.ktown.cardspendtracker.data.CardRepository
+import dev.ktown.cardspendtracker.data.ExportImportManager
 import dev.ktown.cardspendtracker.ui.viewmodel.CardViewModel
 import dev.ktown.cardspendtracker.ui.viewmodel.CardViewModelFactory
-import dev.ktown.cardspendtracker.ui.viewmodel.CardWithProgress
+import dev.ktown.cardspendtracker.ui.viewmodel.CardWithGoalsProgress
+import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
@@ -31,22 +76,118 @@ fun HomeScreen(
     onNavigateToCards: () -> Unit,
     onNavigateToAddCard: () -> Unit,
     onNavigateToAddTransaction: (Long) -> Unit,
+    onNavigateToTransactions: (Long) -> Unit,
+    onNavigateToGoals: (Long) -> Unit,
     viewModel: CardViewModel = viewModel(
         factory = CardViewModelFactory(
             CardRepository(
                 AppDatabase.getDatabase(LocalContext.current).cardDao(),
+                AppDatabase.getDatabase(LocalContext.current).goalDao(),
                 AppDatabase.getDatabase(LocalContext.current).transactionDao()
             )
         )
     )
 ) {
     val cardsWithProgress by viewModel.cardsWithProgress.collectAsState()
-    
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val exportImportManager = remember { ExportImportManager(context) }
+    val repository = remember {
+        CardRepository(
+            AppDatabase.getDatabase(context).cardDao(),
+            AppDatabase.getDatabase(context).goalDao(),
+            AppDatabase.getDatabase(context).transactionDao()
+        )
+    }
+
+    var showImportDialog by remember { mutableStateOf(false) }
+    var showExportDialog by remember { mutableStateOf(false) }
+    var importResult by remember {
+        mutableStateOf<dev.ktown.cardspendtracker.data.ImportResult?>(
+            null
+        )
+    }
+    var isExporting by remember { mutableStateOf(false) }
+    var isImporting by remember { mutableStateOf(false) }
+
+    // File picker launcher for import
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            scope.launch {
+                isImporting = true
+                val json = exportImportManager.readFromUri(it)
+                if (json != null) {
+                    importResult = exportImportManager.importData(json, repository)
+                    showImportDialog = true
+                } else {
+                    importResult = dev.ktown.cardspendtracker.data.ImportResult(
+                        success = false,
+                        cardsImported = 0,
+                        goalsImported = 0,
+                        transactionsImported = 0,
+                        errors = listOf("Failed to read file")
+                    )
+                    showImportDialog = true
+                }
+                isImporting = false
+            }
+        }
+    }
+
+    // Create document launcher for export
+    val createDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        uri?.let {
+            scope.launch {
+                isExporting = true
+                val json = exportImportManager.exportData(repository)
+                val success = exportImportManager.writeToUri(it, json)
+                if (success) {
+                    // Share the file using ShareSheet (includes Google Drive option)
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/json"
+                        putExtra(Intent.EXTRA_STREAM, it)
+                        putExtra(Intent.EXTRA_SUBJECT, "Card Spend Tracker Backup")
+                        putExtra(Intent.EXTRA_TEXT, "Card Spend Tracker backup file")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    try {
+                        val chooser = Intent.createChooser(shareIntent, "Share backup file")
+                        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(chooser)
+                    } catch (e: Exception) {
+                        // If sharing fails, just show success dialog
+                    }
+                    showExportDialog = true
+                }
+                isExporting = false
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Card Spend Tracker") },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            val fileName = exportImportManager.generateFileName()
+                            createDocumentLauncher.launch(fileName)
+                        },
+                        enabled = !isExporting && !isImporting
+                    ) {
+                        Icon(Icons.Default.Upload, contentDescription = "Export Data")
+                    }
+                    IconButton(
+                        onClick = { importLauncher.launch("application/json") },
+                        enabled = !isImporting
+                    ) {
+                        Icon(Icons.Default.Download, contentDescription = "Import Data")
+                    }
                     IconButton(onClick = onNavigateToCards) {
                         Icon(Icons.Default.CreditCard, contentDescription = "View Cards")
                     }
@@ -70,43 +211,273 @@ fun HomeScreen(
             }
         }
     ) { paddingValues ->
-        if (cardsWithProgress.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (cardsWithProgress.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "No cards yet",
+                            style = MaterialTheme.typography.headlineMedium
+                        )
+                        Text(
+                            text = "Add your first card to start tracking",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Button(onClick = onNavigateToAddCard) {
+                            Text("Add Card")
+                        }
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Text(
-                        text = "No cards yet",
-                        style = MaterialTheme.typography.headlineMedium
-                    )
-                    Text(
-                        text = "Add your first card to start tracking",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Button(onClick = onNavigateToAddCard) {
-                        Text("Add Card")
+                    items(cardsWithProgress) { cardWithProgress ->
+                        CardProgressItem(
+                            cardWithProgress = cardWithProgress,
+                            onAddTransaction = { onNavigateToAddTransaction(cardWithProgress.card.id) },
+                            onViewTransactions = { onNavigateToTransactions(cardWithProgress.card.id) },
+                            onManageGoals = { onNavigateToGoals(cardWithProgress.card.id) }
+                        )
+                    }
+                }
+
+                // Loading indicators overlay
+                if (isExporting || isImporting) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
                     }
                 }
             }
-        } else {
-            LazyColumn(
+        }
+
+        // Import result dialog
+        if (showImportDialog && importResult != null) {
+            val result = importResult!!
+            AlertDialog(
+                onDismissRequest = { showImportDialog = false },
+                title = { Text(if (result.success) "Import Successful" else "Import Completed with Errors") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Cards imported: ${result.cardsImported}")
+                        Text("Goals imported: ${result.goalsImported}")
+                        Text("Transactions imported: ${result.transactionsImported}")
+                        if (result.errors.isNotEmpty()) {
+                            Text(
+                                text = "Errors:\n${result.errors.joinToString("\n")}",
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showImportDialog = false }) {
+                        Text("OK")
+                    }
+                }
+            )
+        }
+
+        // Export success dialog
+        if (showExportDialog) {
+            AlertDialog(
+                onDismissRequest = { showExportDialog = false },
+                title = { Text("Export Successful") },
+                text = { Text("Your data has been exported successfully. You can now share it to Google Drive or save it elsewhere.") },
+                confirmButton = {
+                    TextButton(onClick = { showExportDialog = false }) {
+                        Text("OK")
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun CardProgressItem(
+    cardWithProgress: CardWithGoalsProgress,
+    onAddTransaction: () -> Unit,
+    onViewTransactions: () -> Unit,
+    onManageGoals: () -> Unit
+) {
+    val currencyFormat = NumberFormat.getCurrencyInstance()
+    val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+    val cardColor = Color(cardWithProgress.card.color.toULong())
+    val allGoalsHit = cardWithProgress.goals.isNotEmpty() && cardWithProgress.goals.all { it.progress >= 1f }
+    var isExpanded by remember { mutableStateOf(true) }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Color accent bar at top
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .background(cardColor)
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(cardsWithProgress) { cardWithProgress ->
-                    CardProgressItem(
-                        cardWithProgress = cardWithProgress,
-                        onAddTransaction = { onNavigateToAddTransaction(cardWithProgress.card.id) }
-                    )
+                Header(
+                    cardWithProgress = cardWithProgress,
+                    allGoalsHit = allGoalsHit,
+                    isExpanded = isExpanded,
+                    onToggleExpanded = { isExpanded = !isExpanded },
+                    onAddTransaction = onAddTransaction,
+                    onViewTransactions = onViewTransactions,
+                    onManageGoals = onManageGoals
+                )
+
+                AnimatedVisibility(
+                    visible = isExpanded,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Spent",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = currencyFormat.format(cardWithProgress.totalSpend),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = "Goals",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = cardWithProgress.goals.size.toString(),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+
+                        if (cardWithProgress.goals.isEmpty()) {
+                            Text(
+                                text = "No goals yet — add one to start tracking limits.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                cardWithProgress.goals.forEach { goalWithProgress ->
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                if (goalWithProgress.progress >= 1f) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.CheckCircle,
+                                                        contentDescription = "Goal completed",
+                                                        tint = Color(0xFF2E7D32) // green
+                                                    )
+                                                }
+                                                Text(
+                                                    text = goalWithProgress.goal.title,
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            }
+                                            Text(
+                                                text = "Limit: ${currencyFormat.format(goalWithProgress.goal.spendLimit)}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+
+                                        LinearProgressIndicator(
+                                            progress = { goalWithProgress.progress },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            color = when {
+                                                goalWithProgress.progress >= 1f -> MaterialTheme.colorScheme.error
+                                                goalWithProgress.progress >= 0.8f -> MaterialTheme.colorScheme.tertiary
+                                                else -> MaterialTheme.colorScheme.primary
+                                            }
+                                        )
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = "Remaining: ${currencyFormat.format(goalWithProgress.remaining)}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+
+                                            goalWithProgress.daysRemaining?.let { days ->
+                                                Text(
+                                                    text = if (days > 0) "$days days remaining" else "Expired",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = if (days > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                                )
+                                            }
+                                        }
+
+                                        if (goalWithProgress.goal.comment.isNotBlank()) {
+                                            Text(
+                                                text = goalWithProgress.goal.comment,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+
+                                        goalWithProgress.goal.endDate?.let { date ->
+                                            Text(
+                                                text = "Ends: ${dateFormat.format(date)}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -114,102 +485,64 @@ fun HomeScreen(
 }
 
 @Composable
-fun CardProgressItem(
-    cardWithProgress: CardWithProgress,
-    onAddTransaction: () -> Unit
+private fun Header(
+    cardWithProgress: CardWithGoalsProgress,
+    allGoalsHit: Boolean,
+    isExpanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    onAddTransaction: () -> Unit,
+    onViewTransactions: () -> Unit,
+    onManageGoals: () -> Unit
 ) {
-    val currencyFormat = NumberFormat.getCurrencyInstance()
-    val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
-    
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    val interactionSource = remember { MutableInteractionSource() }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                indication = null,
+                interactionSource = interactionSource
+            ) { onToggleExpanded() },
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = cardWithProgress.card.name,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
+            if (allGoalsHit) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = "All goals completed",
+                    tint = Color(0xFF2E7D32) // green
                 )
-                TextButton(onClick = onAddTransaction) {
-                    Text("Add Transaction")
-                }
+                Text(
+                    text = "Done",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color(0xFF2E7D32),
+                    fontWeight = FontWeight.SemiBold
+                )
             }
-            
-            LinearProgressIndicator(
-                progress = { cardWithProgress.progress },
-                modifier = Modifier.fillMaxWidth(),
-                color = when {
-                    cardWithProgress.progress >= 1f -> MaterialTheme.colorScheme.error
-                    cardWithProgress.progress >= 0.8f -> MaterialTheme.colorScheme.tertiary
-                    else -> MaterialTheme.colorScheme.primary
-                }
+            Text(
+                text = cardWithProgress.card.name,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
             )
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text(
-                        text = "Spent",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = currencyFormat.format(cardWithProgress.totalSpend),
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = "Remaining",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = currencyFormat.format(cardWithProgress.remaining),
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Limit: ${currencyFormat.format(cardWithProgress.card.spendLimit)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                cardWithProgress.daysRemaining?.let { days ->
-                    Text(
-                        text = if (days > 0) "$days days remaining" else "Expired",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (days > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                    )
-                }
-                cardWithProgress.card.endDate?.let { date ->
-                    Text(
-                        text = "Ends: ${dateFormat.format(date)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
+        }
+    }
+    Row(
+        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier.padding(horizontal = 12.dp),
+    ) {
+        TextButton(onClick = { onAddTransaction() }) {
+            Text("Add")
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        TextButton(onClick = { onViewTransactions() }) {
+            Text("View")
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        TextButton(onClick = { onManageGoals() }) {
+            Text("Goals")
         }
     }
 }

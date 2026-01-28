@@ -9,7 +9,8 @@ data class Card(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     val name: String,
-    val spendLimit: Double,
-    val endDate: Date? = null,
+    // Stored as Compose Color packed long (ARGB in the top bytes for sRGB).
+    // Default corresponds to Material purple 500.
+    val color: Long = 0xFF6200EE00000000UL.toLong(),
     val createdAt: Date = Date()
 )

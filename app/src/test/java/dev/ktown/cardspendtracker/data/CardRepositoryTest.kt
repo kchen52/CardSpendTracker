@@ -13,21 +13,23 @@ import java.util.Date
 
 class CardRepositoryTest {
     private lateinit var cardDao: CardDao
+    private lateinit var goalDao: GoalDao
     private lateinit var transactionDao: TransactionDao
     private lateinit var repository: CardRepository
     
     @Before
     fun setup() {
         cardDao = mockk()
+        goalDao = mockk()
         transactionDao = mockk()
-        repository = CardRepository(cardDao, transactionDao)
+        repository = CardRepository(cardDao, goalDao, transactionDao)
     }
     
     @Test
     fun `getAllCards returns flow from dao`() = runTest {
         val cards = listOf(
-            Card(1, "Test Card", 1000.0, null),
-            Card(2, "Another Card", 2000.0, Date())
+            Card(1, "Test Card"),
+            Card(2, "Another Card")
         )
         coEvery { cardDao.getAllCards() } returns flowOf(cards)
         
@@ -38,7 +40,7 @@ class CardRepositoryTest {
     
     @Test
     fun `insertCard calls dao insert`() = runTest {
-        val card = Card(0, "New Card", 1500.0, null)
+        val card = Card(0, "New Card")
         coEvery { cardDao.insertCard(card) } returns 1L
         
         repository.insertCard(card)
@@ -69,7 +71,7 @@ class CardRepositoryTest {
     
     @Test
     fun `deleteCard calls dao delete`() = runTest {
-        val card = Card(1, "Card", 1000.0, null)
+        val card = Card(1, "Card")
         coEvery { cardDao.deleteCard(card) } returns Unit
         
         repository.deleteCard(card)

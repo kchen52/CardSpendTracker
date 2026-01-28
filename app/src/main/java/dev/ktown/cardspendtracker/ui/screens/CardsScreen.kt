@@ -29,10 +29,13 @@ fun CardsScreen(
     onNavigateToAddCard: () -> Unit,
     onNavigateToEditCard: (Long) -> Unit,
     onNavigateToAddTransaction: (Long) -> Unit,
+    onNavigateToTransactions: (Long) -> Unit,
+    onNavigateToGoals: (Long) -> Unit,
     viewModel: CardViewModel = viewModel(
         factory = CardViewModelFactory(
             CardRepository(
                 AppDatabase.getDatabase(LocalContext.current).cardDao(),
+                AppDatabase.getDatabase(LocalContext.current).goalDao(),
                 AppDatabase.getDatabase(LocalContext.current).transactionDao()
             )
         )
@@ -94,7 +97,7 @@ fun CardsScreen(
                 items(cardsWithProgress) { cardWithProgress ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        onClick = { onNavigateToEditCard(cardWithProgress.card.id) }
+                        onClick = { onNavigateToTransactions(cardWithProgress.card.id) }
                     ) {
                         Row(
                             modifier = Modifier
@@ -111,18 +114,26 @@ fun CardsScreen(
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "${currencyFormat.format(cardWithProgress.totalSpend)} / ${currencyFormat.format(cardWithProgress.card.spendLimit)}",
+                                    text = "Spent: ${currencyFormat.format(cardWithProgress.totalSpend)}",
                                     style = MaterialTheme.typography.bodyMedium
                                 )
-                                LinearProgressIndicator(
-                                    progress = { cardWithProgress.progress },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 8.dp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Goals: ${cardWithProgress.goals.size}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            TextButton(onClick = { onNavigateToAddTransaction(cardWithProgress.card.id) }) {
-                                Text("Add")
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(onClick = { onNavigateToAddTransaction(cardWithProgress.card.id) }) {
+                                    Text("Add")
+                                }
+                                TextButton(onClick = { onNavigateToGoals(cardWithProgress.card.id) }) {
+                                    Text("Goals")
+                                }
+                                TextButton(onClick = { onNavigateToEditCard(cardWithProgress.card.id) }) {
+                                    Text("Card")
+                                }
                             }
                         }
                     }

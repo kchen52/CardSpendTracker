@@ -5,17 +5,23 @@ import dev.ktown.cardspendtracker.data.CardRepository
 import dev.ktown.cardspendtracker.data.Transaction
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import org.junit.Rule
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import java.util.Date
+import dev.ktown.cardspendtracker.MainDispatcherRule
 
 class TransactionViewModelTest {
     private lateinit var repository: CardRepository
     private lateinit var viewModel: TransactionViewModel
+
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
     
     @Before
     fun setup() {
@@ -62,8 +68,8 @@ class TransactionViewModelTest {
         )
         val totalSpend = 300.0
         
-        coEvery { repository.getTransactionsForCard(cardId) } returns flowOf(transactions)
-        coEvery { repository.getTotalSpendForCard(cardId) } returns flowOf(totalSpend)
+        every { repository.getTransactionsForCard(cardId) } returns flowOf(transactions)
+        every { repository.getTotalSpendForCard(cardId) } returns flowOf(totalSpend)
         
         viewModel.loadTransactionsForCard(cardId)
         

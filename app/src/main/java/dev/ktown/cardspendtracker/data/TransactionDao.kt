@@ -8,6 +8,9 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE cardId = :cardId ORDER BY date DESC")
     fun getTransactionsForCard(cardId: Long): Flow<List<Transaction>>
     
+    @Query("SELECT * FROM transactions WHERE id = :transactionId")
+    suspend fun getTransactionById(transactionId: Long): Transaction?
+    
     @Query("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE cardId = :cardId")
     fun getTotalSpendForCard(cardId: Long): Flow<Double>
     

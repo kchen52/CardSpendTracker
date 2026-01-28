@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.ktown.cardspendtracker.data.Card
 import dev.ktown.cardspendtracker.data.CardRepository
+import dev.ktown.cardspendtracker.data.Goal
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,17 +15,22 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 
-data class CardWithProgress(
-    val card: Card,
-    val totalSpend: Double,
+data class GoalWithProgress(
+    val goal: Goal,
     val progress: Float,
     val remaining: Double,
     val daysRemaining: Int?
 )
 
+data class CardWithGoalsProgress(
+    val card: Card,
+    val totalSpend: Double,
+    val goals: List<GoalWithProgress>
+)
+
 class CardViewModel(private val repository: CardRepository) : ViewModel() {
-    private val _cardsWithProgress = MutableStateFlow<List<CardWithProgress>>(emptyList())
-    val cardsWithProgress: StateFlow<List<CardWithProgress>> = _cardsWithProgress.asStateFlow()
+    private val _cardsWithProgress = MutableStateFlow<List<CardWithGoalsProgress>>(emptyList())
+    val cardsWithProgress: StateFlow<List<CardWithGoalsProgress>> = _cardsWithProgress.asStateFlow()
     
     init {
         loadCards()
@@ -37,17 +43,21 @@ class CardViewModel(private val repository: CardRepository) : ViewModel() {
                     if (cards.isEmpty()) {
                         kotlinx.coroutines.flow.flowOf(emptyList())
                     } else {
-                        // Create flows for each card's spend
-                        val spendFlows = cards.map { card ->
-                            repository.getTotalSpendForCard(card.id)
-                        }
-                        
-                        // Combine all spend flows
-                        combine(spendFlows) { spends ->
-                            cards.mapIndexed { index, card ->
-                                val totalSpend = spends[index] as Double
-                                calculateCardProgress(card, totalSpend)
+                        val cardFlows = cards.map { card ->
+                            combine(
+                                repository.getTotalSpendForCard(card.id),
+                                repository.getGoalsForCard(card.id)
+                            ) { totalSpend, goals ->
+                                CardWithGoalsProgress(
+                                    card = card,
+                                    totalSpend = totalSpend,
+                                    goals = goals.map { goal -> calculateGoalProgress(goal, totalSpend) }
+                                )
                             }
+                        }
+
+                        combine(cardFlows) { items ->
+                            items.map { it as CardWithGoalsProgress }
                         }
                     }
                 }
@@ -57,8 +67,8 @@ class CardViewModel(private val repository: CardRepository) : ViewModel() {
         }
     }
     
-    private fun calculateCardProgress(card: Card, totalSpend: Double): CardWithProgress {
-        val daysRemaining = card.endDate?.let { endDate ->
+    private fun calculateGoalProgress(goal: Goal, totalSpend: Double): GoalWithProgress {
+        val daysRemaining = goal.endDate?.let { endDate ->
             val now = System.currentTimeMillis()
             val end = endDate.time
             if (end > now) {
@@ -67,18 +77,17 @@ class CardViewModel(private val repository: CardRepository) : ViewModel() {
                 0
             }
         }
-        
-        val progress = if (card.spendLimit > 0) {
-            (totalSpend / card.spendLimit).coerceIn(0.toDouble(), 1.toDouble())
+
+        val progress = if (goal.spendLimit > 0) {
+            (totalSpend / goal.spendLimit).coerceIn(0.toDouble(), 1.toDouble())
         } else {
             0f
         }.toFloat()
-        
-        return CardWithProgress(
-            card = card,
-            totalSpend = totalSpend,
+
+        return GoalWithProgress(
+            goal = goal,
             progress = progress,
-            remaining = (card.spendLimit - totalSpend).coerceAtLeast(0.0),
+            remaining = (goal.spendLimit - totalSpend).coerceAtLeast(0.0),
             daysRemaining = daysRemaining
         )
     }
@@ -88,6 +97,28 @@ class CardViewModel(private val repository: CardRepository) : ViewModel() {
     fun addCard(card: Card) {
         viewModelScope.launch {
             repository.insertCard(card)
+        }
+    }
+
+    fun addCardWithInitialGoal(
+        cardName: String,
+        cardColor: Long,
+        goalTitle: String,
+        spendLimit: Double,
+        endDate: java.util.Date?,
+        comment: String
+    ) {
+        viewModelScope.launch {
+            val cardId = repository.insertCard(Card(name = cardName, color = cardColor))
+            repository.insertGoal(
+                Goal(
+                    cardId = cardId,
+                    title = goalTitle,
+                    spendLimit = spendLimit,
+                    endDate = endDate,
+                    comment = comment
+                )
+            )
         }
     }
     

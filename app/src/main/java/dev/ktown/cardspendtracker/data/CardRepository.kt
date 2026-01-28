@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.Flow
 
 class CardRepository(
     private val cardDao: CardDao,
+    private val goalDao: GoalDao,
     private val transactionDao: TransactionDao
 ) {
     fun getAllCards(): Flow<List<Card>> = cardDao.getAllCards()
@@ -15,9 +16,27 @@ class CardRepository(
     suspend fun updateCard(card: Card) = cardDao.updateCard(card)
     
     suspend fun deleteCard(card: Card) = cardDao.deleteCard(card)
+
+    fun getGoalsForCard(cardId: Long): Flow<List<Goal>> =
+        goalDao.getGoalsForCard(cardId)
+
+    suspend fun getGoalById(goalId: Long): Goal? =
+        goalDao.getGoalById(goalId)
+
+    suspend fun insertGoal(goal: Goal): Long =
+        goalDao.insertGoal(goal)
+
+    suspend fun updateGoal(goal: Goal) =
+        goalDao.updateGoal(goal)
+
+    suspend fun deleteGoal(goal: Goal) =
+        goalDao.deleteGoal(goal)
     
     fun getTransactionsForCard(cardId: Long): Flow<List<Transaction>> =
         transactionDao.getTransactionsForCard(cardId)
+    
+    suspend fun getTransactionById(transactionId: Long): Transaction? =
+        transactionDao.getTransactionById(transactionId)
     
     fun getTotalSpendForCard(cardId: Long): Flow<Double> =
         transactionDao.getTotalSpendForCard(cardId)

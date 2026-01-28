@@ -62,6 +62,12 @@ dependencies {
     // Navigation
     implementation(libs.androidx.navigation.compose)
     
+    // JSON serialization
+    implementation("com.google.code.gson:gson:2.10.1")
+    
+    // File picker
+    implementation("androidx.activity:activity-compose:1.9.3")
+    
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
