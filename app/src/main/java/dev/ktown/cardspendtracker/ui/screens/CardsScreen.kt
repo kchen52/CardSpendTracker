@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.ktown.cardspendtracker.data.AppDatabase
 import dev.ktown.cardspendtracker.data.CardRepository
+import dev.ktown.cardspendtracker.ui.theme.CtaButton
 import dev.ktown.cardspendtracker.ui.viewmodel.CardViewModel
 import dev.ktown.cardspendtracker.ui.viewmodel.CardViewModelFactory
 import java.text.NumberFormat
@@ -81,9 +82,7 @@ fun CardsScreen(
                         text = "No cards yet",
                         style = MaterialTheme.typography.headlineMedium
                     )
-                    Button(onClick = onNavigateToAddCard) {
-                        Text("Add Your First Card")
-                    }
+                    CtaButton(onClick = onNavigateToAddCard, text = "Add Your First Card")
                 }
             }
         } else {

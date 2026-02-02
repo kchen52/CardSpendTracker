@@ -2,11 +2,13 @@ package dev.ktown.cardspendtracker.data
 
 import android.content.Context
 import android.net.Uri
+import android.os.Environment
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -212,6 +214,42 @@ class ExportImportManager(private val context: Context) {
     fun generateFileName(): String {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault())
         return "card_spend_tracker_${dateFormat.format(Date())}.json"
+    }
+
+    /**
+     * Exports data to app-specific storage (Documents folder).
+     * Prunes old backups, keeping the most recent [MAX_BACKUP_FILES].
+     * @return The created file, or null on failure
+     */
+    suspend fun exportToAppStorage(repository: CardRepository): File? = withContext(Dispatchers.IO) {
+        try {
+            val json = exportData(repository)
+            val dir = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)
+                ?: context.filesDir
+            val file = File(dir, generateFileName())
+            file.writeText(json)
+            pruneOldBackups(dir)
+            file
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Deletes oldest backup files beyond [MAX_BACKUP_FILES].
+     */
+    private fun pruneOldBackups(directory: File) {
+        val backupFiles = directory.listFiles { file ->
+            file.isFile && file.name.startsWith("card_spend_tracker_") && file.name.endsWith(".json")
+        } ?: return
+        if (backupFiles.size <= MAX_BACKUP_FILES) return
+        backupFiles.sortedBy { it.lastModified() }
+            .take(backupFiles.size - MAX_BACKUP_FILES)
+            .forEach { it.delete() }
+    }
+
+    companion object {
+        private const val MAX_BACKUP_FILES = 7
     }
 }
 

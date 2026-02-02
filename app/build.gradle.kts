@@ -50,10 +50,13 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
-    
+    // Foundation (snapping APIs required by kizitonwose Calendar)
+    implementation("androidx.compose.foundation:foundation")
+
     // Room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
+    implementation(libs.androidx.ui)
     ksp(libs.androidx.room.compiler)
     
     // ViewModel
@@ -64,9 +67,15 @@ dependencies {
     
     // JSON serialization
     implementation("com.google.code.gson:gson:2.10.1")
+
+    // Calendar (kizitonwose) - single-date picker in dialogs (2.5.x for Kotlin 2.0 compatibility)
+    implementation("com.kizitonwose.calendar:compose:2.5.0")
     
     // File picker
     implementation("androidx.activity:activity-compose:1.9.3")
+
+    // WorkManager (daily export)
+    implementation(libs.androidx.work.runtime.ktx)
     
     // Testing
     testImplementation(libs.junit)

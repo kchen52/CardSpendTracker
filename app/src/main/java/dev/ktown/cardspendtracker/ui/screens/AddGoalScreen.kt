@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -22,8 +21,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.DatePicker
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,10 +34,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.ktown.cardspendtracker.data.AppDatabase
 import dev.ktown.cardspendtracker.data.CardRepository
 import dev.ktown.cardspendtracker.data.Goal
+import dev.ktown.cardspendtracker.ui.CalendarDatePickerDialog
+import dev.ktown.cardspendtracker.ui.theme.CtaButton
 import dev.ktown.cardspendtracker.ui.viewmodel.GoalViewModel
 import dev.ktown.cardspendtracker.ui.viewmodel.GoalViewModelFactory
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -142,34 +140,11 @@ fun AddGoalScreen(
             }
 
             if (hasEndDate) {
-                val datePickerState = rememberDatePickerState(
-                    initialSelectedDateMillis = endDate?.time
-                )
-
                 if (showDatePicker) {
-                    AlertDialog(
-                        onDismissRequest = { showDatePicker = false },
-                        confirmButton = {
-                            TextButton(
-                                onClick = {
-                                    datePickerState.selectedDateMillis?.let { millis ->
-                                        // Convert UTC milliseconds to local date at midnight
-                                        val calendar = Calendar.getInstance()
-                                        calendar.timeInMillis = millis
-                                        calendar.set(Calendar.HOUR_OF_DAY, 0)
-                                        calendar.set(Calendar.MINUTE, 0)
-                                        calendar.set(Calendar.SECOND, 0)
-                                        calendar.set(Calendar.MILLISECOND, 0)
-                                        endDate = calendar.time
-                                    }
-                                    showDatePicker = false
-                                }
-                            ) { Text("OK") }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
-                        },
-                        text = { DatePicker(state = datePickerState) }
+                    CalendarDatePickerDialog(
+                        selectedDate = endDate ?: Date(),
+                        onDateSelected = { endDate = it },
+                        onDismiss = { showDatePicker = false }
                     )
                 }
 
@@ -187,7 +162,7 @@ fun AddGoalScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            Button(
+            CtaButton(
                 onClick = {
                     val limit = spendLimit.toDoubleOrNull() ?: 0.0
                     if (title.isNotBlank() && limit > 0) {
@@ -206,7 +181,10 @@ fun AddGoalScreen(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = title.isNotBlank() && (spendLimit.toDoubleOrNull() ?: 0.0) > 0
             ) {
-                Text(if (isEditMode) "Update Goal" else "Add Goal")
+                Text(
+                    text = if (isEditMode) "Update Goal" else "Add Goal",
+                    style = MaterialTheme.typography.titleMedium
+                )
             }
         }
     }

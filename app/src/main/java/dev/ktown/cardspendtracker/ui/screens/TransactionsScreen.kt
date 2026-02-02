@@ -19,6 +19,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.ktown.cardspendtracker.data.AppDatabase
 import dev.ktown.cardspendtracker.data.CardRepository
 import dev.ktown.cardspendtracker.data.Transaction
+import dev.ktown.cardspendtracker.ui.theme.CtaButton
 import dev.ktown.cardspendtracker.ui.viewmodel.CardViewModel
 import dev.ktown.cardspendtracker.ui.viewmodel.CardViewModelFactory
 import dev.ktown.cardspendtracker.ui.viewmodel.TransactionViewModel
@@ -104,12 +105,11 @@ fun TransactionsScreen(
                         text = "Add your first transaction to start tracking",
                         style = MaterialTheme.typography.bodyMedium
                     )
-                    Button(onClick = { onNavigateToAddTransaction(cardId) }) {
-                        Text("Add Transaction")
-                    }
+                    CtaButton(onClick = { onNavigateToAddTransaction(cardId) }, text = "Add Transaction")
                 }
             }
         } else {
+            val dayHeaderFormat = remember { SimpleDateFormat("EEE, MMM dd, yyyy", Locale.getDefault()) }
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -117,7 +117,27 @@ fun TransactionsScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(transactions) { transaction ->
+                items(
+                    items = transactions,
+                    key = { it.id }
+                ) { transaction ->
+                    val idx = transactions.indexOf(transaction)
+                    val prev = transactions.getOrNull(idx - 1)
+                    val currDay = dayHeaderFormat.format(transaction.date)
+                    val prevDay = prev?.let { dayHeaderFormat.format(it.date) }
+                    val showDayHeader = prevDay == null || prevDay != currDay
+
+                    if (showDayHeader) {
+                        Text(
+                            text = currDay,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = if (idx == 0) 0.dp else 8.dp)
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
+                    }
+
                     TransactionItem(
                         transaction = transaction,
                         onEdit = { onNavigateToEditTransaction(cardId, transaction.id) },

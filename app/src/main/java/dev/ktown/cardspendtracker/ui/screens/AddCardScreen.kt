@@ -21,10 +21,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.ktown.cardspendtracker.data.AppDatabase
 import dev.ktown.cardspendtracker.data.Card
 import dev.ktown.cardspendtracker.data.CardRepository
+import dev.ktown.cardspendtracker.ui.CalendarDatePickerDialog
+import dev.ktown.cardspendtracker.ui.theme.CtaButton
 import dev.ktown.cardspendtracker.ui.viewmodel.CardViewModel
 import dev.ktown.cardspendtracker.ui.viewmodel.CardViewModelFactory
 import java.util.*
-import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -208,40 +209,11 @@ fun AddCardScreen(
                 }
 
                 if (hasEndDate) {
-                    val datePickerState = rememberDatePickerState(
-                        initialSelectedDateMillis = endDate?.time
-                    )
-
                     if (showDatePicker) {
-                        AlertDialog(
-                            onDismissRequest = { showDatePicker = false },
-                            confirmButton = {
-                                TextButton(
-                                    onClick = {
-                                        datePickerState.selectedDateMillis?.let { millis ->
-                                            // Convert UTC milliseconds to local date at midnight
-                                            val calendar = Calendar.getInstance()
-                                            calendar.timeInMillis = millis
-                                            calendar.set(Calendar.HOUR_OF_DAY, 0)
-                                            calendar.set(Calendar.MINUTE, 0)
-                                            calendar.set(Calendar.SECOND, 0)
-                                            calendar.set(Calendar.MILLISECOND, 0)
-                                            endDate = calendar.time
-                                        }
-                                        showDatePicker = false
-                                    }
-                                ) {
-                                    Text("OK")
-                                }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = { showDatePicker = false }) {
-                                    Text("Cancel")
-                                }
-                            },
-                            text = {
-                                DatePicker(state = datePickerState)
-                            }
+                        CalendarDatePickerDialog(
+                            selectedDate = endDate ?: Date(),
+                            onDateSelected = { endDate = it },
+                            onDismiss = { showDatePicker = false }
                         )
                     }
 
@@ -260,7 +232,7 @@ fun AddCardScreen(
             
             Spacer(modifier = Modifier.weight(1f))
             
-            Button(
+            CtaButton(
                 onClick = {
                     if (isEditMode) {
                         if (name.isNotBlank() && existingCard != null) {
@@ -297,7 +269,10 @@ fun AddCardScreen(
                         spendLimit.toDoubleOrNull()!! > 0
                 }
             ) {
-                Text(if (isEditMode) "Update Card" else "Add Card + Goal")
+                Text(
+                    text = if (isEditMode) "Update Card" else "Add Card + Goal",
+                    style = MaterialTheme.typography.titleMedium
+                )
             }
         }
     }

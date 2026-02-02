@@ -45,6 +45,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.ktown.cardspendtracker.data.AppDatabase
 import dev.ktown.cardspendtracker.data.CardRepository
 import dev.ktown.cardspendtracker.data.Goal
+import dev.ktown.cardspendtracker.ui.theme.CtaButton
 import dev.ktown.cardspendtracker.ui.viewmodel.CardViewModel
 import dev.ktown.cardspendtracker.ui.viewmodel.CardViewModelFactory
 import dev.ktown.cardspendtracker.ui.viewmodel.GoalViewModel
@@ -143,9 +144,7 @@ fun GoalsScreen(
                         text = "Add a goal to track spend against a limit",
                         style = MaterialTheme.typography.bodyMedium
                     )
-                    TextButton(onClick = { onNavigateToAddGoal(cardId) }) {
-                        Text("Add Goal")
-                    }
+                    CtaButton(onClick = { onNavigateToAddGoal(cardId) }, text = "Add Goal")
                 }
             }
         } else {
@@ -202,7 +201,6 @@ private fun GoalItem(
     val currencyFormat = NumberFormat.getCurrencyInstance()
     val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
     val progress = if (goal.spendLimit > 0) (totalSpend / goal.spendLimit).coerceIn(0.0, 1.0).toFloat() else 0f
-    val remaining = (goal.spendLimit - totalSpend).coerceAtLeast(0.0)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -222,7 +220,7 @@ private fun GoalItem(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "${currencyFormat.format(totalSpend)} spent • ${currencyFormat.format(remaining)} remaining",
+                    text = "Goal: ${currencyFormat.format(goal.spendLimit)}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

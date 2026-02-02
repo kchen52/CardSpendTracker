@@ -29,11 +29,12 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -42,11 +43,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import android.content.Context
 import android.content.SharedPreferences
+import dev.ktown.cardspendtracker.ui.theme.CtaButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -65,6 +68,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.ktown.cardspendtracker.data.AppDatabase
 import dev.ktown.cardspendtracker.data.CardRepository
 import dev.ktown.cardspendtracker.data.ExportImportManager
+import dev.ktown.cardspendtracker.worker.DailyExportScheduler
 import dev.ktown.cardspendtracker.ui.viewmodel.CardViewModel
 import dev.ktown.cardspendtracker.ui.viewmodel.CardViewModelFactory
 import dev.ktown.cardspendtracker.ui.viewmodel.CardWithGoalsProgress
@@ -72,6 +76,9 @@ import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.roundToInt
+
+private const val KEY_AUTO_DAILY_EXPORT = "auto_daily_export"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -106,6 +113,22 @@ fun HomeScreen(
     // Persist expand/collapse state
     val prefs = remember {
         context.getSharedPreferences("card_expand_state", Context.MODE_PRIVATE)
+    }
+    val appSettingsPrefs = remember {
+        context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+    }
+    var autoDailyExportEnabled by remember {
+        mutableStateOf(appSettingsPrefs.getBoolean(KEY_AUTO_DAILY_EXPORT, false))
+    }
+    var showSettingsMenu by remember { mutableStateOf(false) }
+
+    LaunchedEffect(autoDailyExportEnabled) {
+        if (autoDailyExportEnabled) {
+            DailyExportScheduler.schedule(context)
+        } else {
+            DailyExportScheduler.cancel(context)
+        }
+        appSettingsPrefs.edit().putBoolean(KEY_AUTO_DAILY_EXPORT, autoDailyExportEnabled).apply()
     }
     var collapsedCardIds by remember {
         mutableStateOf<Set<Long>>(emptySet())
@@ -222,6 +245,32 @@ fun HomeScreen(
                     IconButton(onClick = onNavigateToAddCard) {
                         Icon(Icons.Default.Add, contentDescription = "Add Card")
                     }
+                    Box {
+                        IconButton(onClick = { showSettingsMenu = true }) {
+                            Icon(Icons.Default.Settings, contentDescription = "Settings")
+                        }
+                        DropdownMenu(
+                            expanded = showSettingsMenu,
+                            onDismissRequest = { showSettingsMenu = false }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "Auto daily export",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                Switch(
+                                    checked = autoDailyExportEnabled,
+                                    onCheckedChange = { autoDailyExportEnabled = it }
+                                )
+                            }
+                        }
+                    }
                 }
             )
         },
@@ -259,9 +308,7 @@ fun HomeScreen(
                             text = "Add your first card to start tracking",
                             style = MaterialTheme.typography.bodyMedium
                         )
-                        Button(onClick = onNavigateToAddCard) {
-                            Text("Add Card")
-                        }
+                        CtaButton(onClick = onNavigateToAddCard, text = "Add Card")
                     }
                 }
             } else {
@@ -435,6 +482,7 @@ fun CardProgressItem(
                         } else {
                             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 cardWithProgress.goals.forEach { goalWithProgress ->
+                                    val percent = (goalWithProgress.progress * 100f).roundToInt()
                                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
@@ -458,11 +506,19 @@ fun CardProgressItem(
                                                     fontWeight = FontWeight.SemiBold
                                                 )
                                             }
-                                            Text(
-                                                text = "Limit: ${currencyFormat.format(goalWithProgress.goal.spendLimit)}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+                                            Column(horizontalAlignment = Alignment.End) {
+                                                Text(
+                                                    text = "${percent}%",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                Text(
+                                                    text = "Limit: ${currencyFormat.format(goalWithProgress.goal.spendLimit)}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
                                         }
 
                                         LinearProgressIndicator(
@@ -550,12 +606,6 @@ private fun Header(
                     imageVector = Icons.Default.CheckCircle,
                     contentDescription = "All goals completed",
                     tint = Color(0xFF2E7D32) // green
-                )
-                Text(
-                    text = "Done",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color(0xFF2E7D32),
-                    fontWeight = FontWeight.SemiBold
                 )
             }
             Text(
