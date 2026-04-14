@@ -38,6 +38,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -133,10 +134,28 @@ fun HomeScreen(
     var collapsedCardIds by remember {
         mutableStateOf<Set<Long>>(emptySet())
     }
+    var autoCollapsedCompletedIds by remember {
+        mutableStateOf<Set<Long>>(emptySet())
+    }
+    val (activeCards, completedCards) = remember(cardsWithProgress) {
+        cardsWithProgress.partition { !isCardFullyCompleted(it) }
+    }
 
     LaunchedEffect(Unit) {
         val storedIds = prefs.getStringSet("collapsed_ids", emptySet()) ?: emptySet()
         collapsedCardIds = storedIds.mapNotNull { it.toLongOrNull() }.toSet()
+    }
+
+    LaunchedEffect(completedCards) {
+        val completedIds = completedCards.map { it.card.id }.toSet()
+        val idsToAutoCollapse = completedIds - autoCollapsedCompletedIds
+        if (idsToAutoCollapse.isNotEmpty()) {
+            collapsedCardIds = collapsedCardIds + idsToAutoCollapse
+            autoCollapsedCompletedIds = autoCollapsedCompletedIds + idsToAutoCollapse
+            prefs.edit()
+                .putStringSet("collapsed_ids", collapsedCardIds.map { it.toString() }.toSet())
+                .apply()
+        }
     }
 
     fun updateCollapsedState(cardId: Long, isCollapsed: Boolean) {
@@ -277,8 +296,10 @@ fun HomeScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
-                    if (cardsWithProgress.isNotEmpty()) {
-                        onNavigateToAddTransaction(cardsWithProgress.first().card.id)
+                    if (activeCards.isNotEmpty()) {
+                        onNavigateToAddTransaction(activeCards.first().card.id)
+                    } else if (completedCards.isNotEmpty()) {
+                        onNavigateToAddTransaction(completedCards.first().card.id)
                     } else {
                         onNavigateToAddCard()
                     }
@@ -319,21 +340,54 @@ fun HomeScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                items(cardsWithProgress) { cardWithProgress ->
-                    val cardId = cardWithProgress.card.id
-                    val isExpanded = cardId !in collapsedCardIds
-                    
-                    CardProgressItem(
-                        cardWithProgress = cardWithProgress,
-                        isExpanded = isExpanded,
-                        onToggleExpanded = {
-                            updateCollapsedState(cardId, isCollapsed = isExpanded)
-                        },
-                        onAddTransaction = { onNavigateToAddTransaction(cardId) },
-                        onViewTransactions = { onNavigateToTransactions(cardId) },
-                        onManageGoals = { onNavigateToGoals(cardId) }
-                    )
-                }
+                    items(activeCards) { cardWithProgress ->
+                        val cardId = cardWithProgress.card.id
+                        val isExpanded = cardId !in collapsedCardIds
+
+                        CardProgressItem(
+                            cardWithProgress = cardWithProgress,
+                            isExpanded = isExpanded,
+                            compactMode = false,
+                            onToggleExpanded = {
+                                updateCollapsedState(cardId, isCollapsed = isExpanded)
+                            },
+                            onAddTransaction = { onNavigateToAddTransaction(cardId) },
+                            onViewTransactions = { onNavigateToTransactions(cardId) },
+                            onManageGoals = { onNavigateToGoals(cardId) }
+                        )
+                    }
+
+                    if (activeCards.isNotEmpty() && completedCards.isNotEmpty()) {
+                        item {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                HorizontalDivider()
+                                Text(
+                                    text = "Completed Cards",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    items(completedCards) { cardWithProgress ->
+                        val cardId = cardWithProgress.card.id
+                        val isExpanded = cardId !in collapsedCardIds
+
+                        CardProgressItem(
+                            cardWithProgress = cardWithProgress,
+                            isExpanded = isExpanded,
+                            compactMode = true,
+                            onToggleExpanded = {
+                                updateCollapsedState(cardId, isCollapsed = isExpanded)
+                            },
+                            onAddTransaction = { onNavigateToAddTransaction(cardId) },
+                            onViewTransactions = { onNavigateToTransactions(cardId) },
+                            onManageGoals = { onNavigateToGoals(cardId) }
+                        )
+                    }
                 }
 
                 // Loading indicators overlay
@@ -397,6 +451,7 @@ fun HomeScreen(
 fun CardProgressItem(
     cardWithProgress: CardWithGoalsProgress,
     isExpanded: Boolean,
+    compactMode: Boolean,
     onToggleExpanded: () -> Unit,
     onAddTransaction: () -> Unit,
     onViewTransactions: () -> Unit,
@@ -410,27 +465,29 @@ fun CardProgressItem(
     Card(
         modifier = Modifier
             .fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (compactMode) 1.dp else 4.dp
+        )
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // Color accent bar at top
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(4.dp)
+                    .height(if (compactMode) 2.dp else 4.dp)
                     .background(cardColor)
             )
 
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(if (compactMode) 10.dp else 16.dp),
+                verticalArrangement = Arrangement.spacedBy(if (compactMode) 8.dp else 12.dp)
             ) {
                 Header(
                     cardWithProgress = cardWithProgress,
                     allGoalsHit = allGoalsHit,
-                    isExpanded = isExpanded,
+                    compactMode = compactMode,
                     onToggleExpanded = onToggleExpanded,
                     onAddTransaction = onAddTransaction,
                     onViewTransactions = onViewTransactions,
@@ -580,7 +637,7 @@ fun CardProgressItem(
 private fun Header(
     cardWithProgress: CardWithGoalsProgress,
     allGoalsHit: Boolean,
-    isExpanded: Boolean,
+    compactMode: Boolean,
     onToggleExpanded: () -> Unit,
     onAddTransaction: () -> Unit,
     onViewTransactions: () -> Unit,
@@ -598,7 +655,7 @@ private fun Header(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (compactMode) 8.dp else 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (allGoalsHit) {
@@ -610,25 +667,43 @@ private fun Header(
             }
             Text(
                 text = cardWithProgress.card.name,
-                style = MaterialTheme.typography.headlineSmall,
+                style = if (compactMode) {
+                    MaterialTheme.typography.titleMedium
+                } else {
+                    MaterialTheme.typography.headlineSmall
+                },
                 fontWeight = FontWeight.Bold
             )
         }
     }
     Row(
         horizontalArrangement = Arrangement.SpaceBetween,
-        modifier = Modifier.padding(horizontal = 12.dp),
+        modifier = Modifier.padding(horizontal = if (compactMode) 8.dp else 12.dp),
     ) {
         TextButton(onClick = { onAddTransaction() }) {
-            Text("Add")
+            Text(
+                text = "Add",
+                style = if (compactMode) MaterialTheme.typography.labelLarge else MaterialTheme.typography.bodyLarge
+            )
         }
         Spacer(modifier = Modifier.weight(1f))
         TextButton(onClick = { onViewTransactions() }) {
-            Text("View")
+            Text(
+                text = "View",
+                style = if (compactMode) MaterialTheme.typography.labelLarge else MaterialTheme.typography.bodyLarge
+            )
         }
         Spacer(modifier = Modifier.weight(1f))
         TextButton(onClick = { onManageGoals() }) {
-            Text("Goals")
+            Text(
+                text = "Goals",
+                style = if (compactMode) MaterialTheme.typography.labelLarge else MaterialTheme.typography.bodyLarge
+            )
         }
     }
+}
+
+internal fun isCardFullyCompleted(cardWithProgress: CardWithGoalsProgress): Boolean {
+    val goals = cardWithProgress.goals
+    return goals.isNotEmpty() && goals.all { it.progress >= 1f }
 }

@@ -33,6 +33,14 @@ class TransactionViewModel(private val repository: CardRepository) : ViewModel()
             repository.insertTransaction(transaction)
         }
     }
+
+    fun addTransactions(transactions: List<Transaction>) {
+        viewModelScope.launch {
+            transactions.forEach { transaction ->
+                repository.insertTransaction(transaction)
+            }
+        }
+    }
     
     fun updateTransaction(transaction: Transaction) {
         viewModelScope.launch {

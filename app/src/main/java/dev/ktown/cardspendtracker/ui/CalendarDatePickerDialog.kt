@@ -10,6 +10,11 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -18,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +43,7 @@ import java.time.YearMonth
 import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 /**
  * Converts [Date] to [LocalDate] in the default time zone.
@@ -65,18 +72,20 @@ fun CalendarDatePickerDialog(
     val initialLocalDate = selectedDate.toLocalDate()
     var pickedDate by remember(selectedDate) { mutableStateOf(initialLocalDate) }
 
-    val currentMonth = remember { YearMonth.now() }
-    val startMonth = remember { currentMonth.minusMonths(120) }
-    val endMonth = remember { currentMonth.plusMonths(120) }
+    val currentMonth = YearMonth.from(initialLocalDate)
+    val startMonth = remember(currentMonth) { currentMonth.minusMonths(120) }
+    val endMonth = remember(currentMonth) { currentMonth.plusMonths(120) }
     val firstDayOfWeek = remember { firstDayOfWeekFromLocale() }
     val daysOfWeek = remember { daysOfWeek(firstDayOfWeek = firstDayOfWeek) }
+    val coroutineScope = rememberCoroutineScope()
 
     val calendarState = rememberCalendarState(
         startMonth = startMonth,
         endMonth = endMonth,
-        firstVisibleMonth = YearMonth.from(initialLocalDate),
+        firstVisibleMonth = currentMonth,
         firstDayOfWeek = firstDayOfWeek
     )
+    val visibleMonth = calendarState.firstVisibleMonth.yearMonth
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -84,6 +93,54 @@ fun CalendarDatePickerDialog(
             shape = MaterialTheme.shapes.extraLarge
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = {
+                            val previousMonth = visibleMonth.minusMonths(1)
+                            if (previousMonth >= startMonth) {
+                                coroutineScope.launch {
+                                    calendarState.animateScrollToMonth(previousMonth)
+                                }
+                            }
+                        },
+                        enabled = visibleMonth > startMonth
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                            contentDescription = "Previous month"
+                        )
+                    }
+                    Text(
+                        text = visibleMonth.month.getDisplayName(
+                            java.time.format.TextStyle.FULL,
+                            Locale.getDefault()
+                        ) + " ${visibleMonth.year}",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    IconButton(
+                        onClick = {
+                            val nextMonth = visibleMonth.plusMonths(1)
+                            if (nextMonth <= endMonth) {
+                                coroutineScope.launch {
+                                    calendarState.animateScrollToMonth(nextMonth)
+                                }
+                            }
+                        },
+                        enabled = visibleMonth < endMonth
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = "Next month"
+                        )
+                    }
+                }
+
                 // Day of week titles
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -104,6 +161,8 @@ fun CalendarDatePickerDialog(
 
                 HorizontalCalendar(
                     state = calendarState,
+                    // Keep non-paged scrolling for Compose compatibility on older foundation versions.
+                    // Month navigation is still explicit via the prev/next controls above.
                     calendarScrollPaged = false,
                     dayContent = { day ->
                         CalendarDay(

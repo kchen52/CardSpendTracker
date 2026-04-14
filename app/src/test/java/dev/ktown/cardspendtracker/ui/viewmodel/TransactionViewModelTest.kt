@@ -31,17 +31,53 @@ class TransactionViewModelTest {
     
     @Test
     fun `addTransaction calls repository insertTransaction`() = runTest {
-        val transaction = Transaction(0, 1L, 100.0, "Test", Date())
+        val transaction = Transaction(
+            id = 0,
+            cardId = 1L,
+            amount = 100.0,
+            description = "Test",
+            date = Date()
+        )
         coEvery { repository.insertTransaction(transaction) } returns 1L
         
         viewModel.addTransaction(transaction)
         
         coVerify { repository.insertTransaction(transaction) }
     }
+
+    @Test
+    fun `addTransactions inserts each transaction`() = runTest {
+        val first = Transaction(
+            id = 0,
+            cardId = 1L,
+            amount = 100.0,
+            description = "Groceries",
+            date = Date()
+        )
+        val second = Transaction(
+            id = 0,
+            cardId = 1L,
+            amount = 49.99,
+            description = "Coffee",
+            date = Date()
+        )
+        coEvery { repository.insertTransaction(any()) } returns 1L
+
+        viewModel.addTransactions(listOf(first, second))
+
+        coVerify(exactly = 1) { repository.insertTransaction(first) }
+        coVerify(exactly = 1) { repository.insertTransaction(second) }
+    }
     
     @Test
     fun `updateTransaction calls repository updateTransaction`() = runTest {
-        val transaction = Transaction(1, 1L, 150.0, "Updated", Date())
+        val transaction = Transaction(
+            id = 1,
+            cardId = 1L,
+            amount = 150.0,
+            description = "Updated",
+            date = Date()
+        )
         coEvery { repository.updateTransaction(transaction) } returns Unit
         
         viewModel.updateTransaction(transaction)
@@ -51,7 +87,13 @@ class TransactionViewModelTest {
     
     @Test
     fun `deleteTransaction calls repository deleteTransaction`() = runTest {
-        val transaction = Transaction(1, 1L, 100.0, "Test", Date())
+        val transaction = Transaction(
+            id = 1,
+            cardId = 1L,
+            amount = 100.0,
+            description = "Test",
+            date = Date()
+        )
         coEvery { repository.deleteTransaction(transaction) } returns Unit
         
         viewModel.deleteTransaction(transaction)
@@ -63,8 +105,20 @@ class TransactionViewModelTest {
     fun `loadTransactionsForCard loads transactions and total spend`() = runTest {
         val cardId = 1L
         val transactions = listOf(
-            Transaction(1, cardId, 100.0, "Transaction 1", Date()),
-            Transaction(2, cardId, 200.0, "Transaction 2", Date())
+            Transaction(
+                id = 1,
+                cardId = cardId,
+                amount = 100.0,
+                description = "Transaction 1",
+                date = Date()
+            ),
+            Transaction(
+                id = 2,
+                cardId = cardId,
+                amount = 200.0,
+                description = "Transaction 2",
+                date = Date()
+            )
         )
         val totalSpend = 300.0
         

@@ -28,8 +28,8 @@ class CardRepositoryTest {
     @Test
     fun `getAllCards returns flow from dao`() = runTest {
         val cards = listOf(
-            Card(1, "Test Card"),
-            Card(2, "Another Card")
+            Card(id = 1, name = "Test Card"),
+            Card(id = 2, name = "Another Card")
         )
         coEvery { cardDao.getAllCards() } returns flowOf(cards)
         
@@ -40,7 +40,7 @@ class CardRepositoryTest {
     
     @Test
     fun `insertCard calls dao insert`() = runTest {
-        val card = Card(0, "New Card")
+        val card = Card(id = 0, name = "New Card")
         coEvery { cardDao.insertCard(card) } returns 1L
         
         repository.insertCard(card)
@@ -61,7 +61,13 @@ class CardRepositoryTest {
     
     @Test
     fun `insertTransaction calls dao insert`() = runTest {
-        val transaction = Transaction(0, 1L, 100.0, "Test", Date())
+        val transaction = Transaction(
+            id = 0,
+            cardId = 1L,
+            amount = 100.0,
+            description = "Test",
+            date = Date()
+        )
         coEvery { transactionDao.insertTransaction(transaction) } returns 1L
         
         repository.insertTransaction(transaction)
@@ -71,7 +77,7 @@ class CardRepositoryTest {
     
     @Test
     fun `deleteCard calls dao delete`() = runTest {
-        val card = Card(1, "Card")
+        val card = Card(id = 1, name = "Card")
         coEvery { cardDao.deleteCard(card) } returns Unit
         
         repository.deleteCard(card)
